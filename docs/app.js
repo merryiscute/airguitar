@@ -332,7 +332,11 @@ function loop(tMs) {
       const vdt = lastHandT === null ? dt : Math.min(t - lastHandT, HOLD_S);
       vY = wristV.update(lm, vdt);
       const dir = strummer.update(vY, vdt);
-      if (dir && chord) { audio.strum(chord, dir); lastStrum = dir; }
+      // 다운스트로크에서만 소리. 업은 인식만 하고 음 없음.
+      if (dir && chord) {
+        lastStrum = dir;
+        if (dir === "down") audio.strum(chord, dir);
+      }
       drawHand(lm, chord);
       lastHandT = t; lastCount = count; lastChord = chord;
     } else {
