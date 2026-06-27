@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>에어 기타 (오른손)</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="stage">
+    <video id="video" playsinline muted></video>
+    <canvas id="canvas"></canvas>
+
+    <div id="hud">
+      <div class="chord" id="chord">-</div>
+      <div class="meta">
+        <span id="count">손가락: -</span>
+        <span id="vy">v_y: 0.00</span>
+        <span id="strum">스트럼: -</span>
+      </div>
+    </div>
+
+    <div id="start-screen">
+      <h1>🎸 에어 기타</h1>
+      <p>오른손을 카메라에 비추세요.<br />
+         손가락 <b>굽힌 개수</b>로 코드를 고르고,<br />
+         손목을 <b>위·아래로 휘둘러</b> 스트럼하세요.</p>
+      <ul class="legend">
+        <li><b>0개</b>(손 펴기) → C</li>
+        <li><b>1개</b> → G</li>
+        <li><b>2개</b> → Am</li>
+        <li><b>3개</b> → F</li>
+      </ul>
+      <button id="start-btn">시작 (카메라 허용)</button>
+      <p class="status" id="status"></p>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
