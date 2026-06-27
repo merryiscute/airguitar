@@ -199,7 +199,7 @@ function loop(tMs) {
       vY = wristV.update(lm, dt);
       const dir = strummer.update(vY, dt);
       if (dir && chord) { audio.strum(chord, dir); lastStrum = dir; }
-      drawHand(lm);
+      drawHand(lm, chord);
     } else {
       stabilizer.reset(); wristV.reset(); strummer.reset();
     }
@@ -223,16 +223,73 @@ function loop(tMs) {
   requestAnimationFrame(loop);
 }
 
-function drawHand(lm) {
+// MediaPipe 손 21점 연결(뼈대). [시작, 끝] 인덱스 쌍.
+const HAND_CONNECTIONS = [
+  [0, 1], [1, 2], [2, 3], [3, 4],        // 엄지
+  [0, 5], [5, 6], [6, 7], [7, 8],        // 검지
+  [5, 9], [9, 10], [10, 11], [11, 12],   // 중지
+  [9, 13], [13, 14], [14, 15], [15, 16], // 약지
+  [13, 17], [17, 18], [18, 19], [19, 20],// 새끼
+  [0, 17],                               // 손바닥 아래
+];
+
+// 인식한 손을 카메라 위에 띄운다: 박스(프레임) + 뼈대 선 + 관절 점 + 코드 라벨.
+function drawHand(lm, chord) {
+  const W = canvas.width, H = canvas.height;
+
+  // 손 전체를 감싸는 박스 좌표(정규화) 계산.
+  let minX = 1, minY = 1, maxX = 0, maxY = 0;
+  for (const p of lm) {
+    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+  }
+  const pad = 0.04;
+  minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad);
+  maxX = Math.min(1, maxX + pad); maxY = Math.min(1, maxY + pad);
+
+  // 거울 좌표계(화면에 보이는 위치)로 그린다.
   ctx2d.save();
   ctx2d.scale(-1, 1);
-  ctx2d.translate(-canvas.width, 0);
+  ctx2d.translate(-W, 0);
+
+  // 뼈대 선
+  ctx2d.strokeStyle = "rgba(74, 222, 128, 0.9)";
+  ctx2d.lineWidth = 3;
+  ctx2d.lineCap = "round";
+  for (const [a, b] of HAND_CONNECTIONS) {
+    ctx2d.beginPath();
+    ctx2d.moveTo(lm[a].x * W, lm[a].y * H);
+    ctx2d.lineTo(lm[b].x * W, lm[b].y * H);
+    ctx2d.stroke();
+  }
+
+  // 관절 점
   ctx2d.fillStyle = "#4ade80";
   for (const p of lm) {
     ctx2d.beginPath();
-    ctx2d.arc(p.x * canvas.width, p.y * canvas.height, 5, 0, Math.PI * 2);
+    ctx2d.arc(p.x * W, p.y * H, 5, 0, Math.PI * 2);
     ctx2d.fill();
   }
+
+  // 인식 박스(프레임)
+  ctx2d.strokeStyle = "#22d3ee";
+  ctx2d.lineWidth = 3;
+  ctx2d.strokeRect(minX * W, minY * H, (maxX - minX) * W, (maxY - minY) * H);
+  ctx2d.restore();
+
+  // 코드 라벨은 거울 좌표라 글자가 뒤집히므로, 정상 좌표계에서 다시 그린다.
+  // 거울 화면에서 정규화 x는 (1 - x) 위치에 보인다.
+  const boxLeftOnScreen = (1 - maxX) * W;
+  const boxTopOnScreen = minY * H;
+  const label = chord ? chord.name : "?";
+  ctx2d.save();
+  ctx2d.font = "bold 28px -apple-system, system-ui, sans-serif";
+  const tw = ctx2d.measureText(label).width;
+  ctx2d.fillStyle = "#22d3ee";
+  ctx2d.fillRect(boxLeftOnScreen, Math.max(0, boxTopOnScreen - 34), tw + 16, 34);
+  ctx2d.fillStyle = "#06222b";
+  ctx2d.textBaseline = "middle";
+  ctx2d.fillText(label, boxLeftOnScreen + 8, Math.max(17, boxTopOnScreen - 17));
   ctx2d.restore();
 }
 
