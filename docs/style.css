@@ -21,9 +21,10 @@ html, body {
 #video { display: none; }
 
 #canvas {
+  display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* 비디오/오버레이를 JS에서 직접 'cover' 매핑하므로 object-fit은 쓰지 않는다. */
 }
 
 /* HUD 오버레이 */
