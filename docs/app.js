@@ -213,8 +213,19 @@ function loop(tMs) {
 
   elChord.textContent = chord ? chord.name : "-";
   elCount.textContent = `손가락: ${count ?? "-"}`;
-  elVy.textContent = `v_y: ${vY.toFixed(2)}`;
-  elStrum.textContent = `스트럼: ${lastStrum}`;
+
+  // 팔(손목) 움직임: 방향 + 속도. v_y>0 = 아래로, v_y<0 = 위로(이미지 y는 아래로 증가).
+  const speed = Math.abs(vY);
+  const DEAD = 0.15; // 이 속도 미만은 정지로 본다
+  let moveDir = "– 정지", moveColor = "#94a3b8";
+  if (vY > DEAD) { moveDir = "↓ 아래"; moveColor = "#4ade80"; }
+  else if (vY < -DEAD) { moveDir = "↑ 위"; moveColor = "#38bdf8"; }
+  elVy.textContent = `움직임: ${moveDir} · 속도 ${speed.toFixed(2)}`;
+  elVy.style.color = moveColor;
+
+  const strumLabel =
+    lastStrum === "down" ? "↓ 다운" : lastStrum === "up" ? "↑ 업" : "-";
+  elStrum.textContent = `스트럼: ${strumLabel}`;
   // 진단: 엔진(GPU/CPU)과 손 인식 여부. 손이 안 잡히면 안내 문구.
   elEngine.textContent = handFound
     ? `엔진: ${delegateInUse} ✓`
