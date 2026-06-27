@@ -12,10 +12,10 @@ Web Audio(소리)를 쓰며, 카메라·스피커는 폰 것을 그대로 사용
 ## 배포 방법 (1회 설정)
 1. GitHub 저장소 → **Settings → Pages**
 2. **Build and deployment → Source**: *Deploy from a branch*
-3. **Branch**: `claude/vision-guitar-hand-tracking-ea2jne` (또는 머지 후 `main`),
+3. **Branch**: `claude/session-start-mlockp` (또는 머지 후 `main`),
    **Folder**: `/docs` 선택 → **Save**
 4. 1~2분 뒤 페이지 URL이 표시됩니다:
-   `https://merryiscute.github.io/stock/`
+   `https://merryiscute.github.io/airguitar/`
 
 ## 폰에서 테스트
 1. 안드로이드 **Chrome**에서 위 URL 접속
