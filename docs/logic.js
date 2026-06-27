@@ -115,31 +115,52 @@ export class WristVelocity {
   reset() { this.prevY = null; this.vY = 0; }
 }
 
-// --- 스트럼 감지 상태머신 ---------------------------------------------------
+// --- 스트럼 감지 상태머신 (에지/슈미트 트리거) -----------------------------
+// 한 스트로크 = 소리 한 번. 임계값을 넘으면 1회 발사한 뒤 "무장 해제"되고,
+// 속도가 릴리스 임계값(= threshold*releaseFactor) 아래로 다시 떨어져야
+// 재무장한다. 방향을 바꿀 때는 속도가 0을 지나며 자연히 재무장된다.
 export class StrumDetector {
-  constructor(threshold = 1.2, confirmFrames = 2, cooldownS = 0.08) {
+  constructor(threshold = 0.7, confirmFrames = 1, cooldownS = 0.12, releaseFactor = 0.6) {
     this.threshold = threshold;
     this.confirmFrames = confirmFrames;
     this.cooldownS = cooldownS;
+    this.releaseFactor = releaseFactor;
     this.streakDir = null;
     this.streakN = 0;
     this.cooldownLeft = 0;
+    this.armed = true; // 발사 가능 상태
   }
   update(vY, dt) {
     if (this.cooldownLeft > 0) this.cooldownLeft = Math.max(0, this.cooldownLeft - dt);
-    let cur = null;
-    if (vY > this.threshold) cur = "down";
-    else if (vY < -this.threshold) cur = "up";
-    if (cur === null) { this.streakDir = null; this.streakN = 0; return null; }
+    const speed = Math.abs(vY);
+    const release = this.threshold * this.releaseFactor;
+
+    // 속도가 릴리스 아래로 떨어지면 다음 스트로크를 위해 재무장.
+    if (speed < release) {
+      this.armed = true;
+      this.streakDir = null;
+      this.streakN = 0;
+      return null;
+    }
+    // 릴리스~임계 사이: 상태 유지만(발사·재무장 없음).
+    if (speed < this.threshold) return null;
+
+    const cur = vY > 0 ? "down" : "up";
     if (cur === this.streakDir) this.streakN++;
     else { this.streakDir = cur; this.streakN = 1; }
-    if (this.cooldownLeft > 0) return null;
+
+    if (!this.armed || this.cooldownLeft > 0) return null;
     if (this.streakN >= this.confirmFrames) {
+      this.armed = false;          // 이 스트로크에서는 더 안 울림
       this.cooldownLeft = this.cooldownS;
-      this.streakN = 0;
       return cur;
     }
     return null;
   }
-  reset() { this.streakDir = null; this.streakN = 0; this.cooldownLeft = 0; }
+  reset() {
+    this.streakDir = null;
+    this.streakN = 0;
+    this.cooldownLeft = 0;
+    this.armed = true;
+  }
 }

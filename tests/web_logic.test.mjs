@@ -142,6 +142,16 @@ test("통합: 코드 선택 + 다운 스트럼 1회", () => {
   assert.equal(fired, "down");
 });
 
+// 7b) 한 스트로크당 한 번만 발사(에지 트리거). 임계를 계속 넘어도 1회.
+test("StrumDetector: 한 스트로크당 한 번만 발사", () => {
+  const d = new StrumDetector(0.7, 1, 0.0); // release = 0.42
+  assert.equal(d.update(1.0, 0.05), "down"); // 첫 크로스에 발사
+  assert.equal(d.update(1.5, 0.05), null);   // 계속 넘어도 무음(무장 해제)
+  assert.equal(d.update(1.2, 0.05), null);
+  assert.equal(d.update(0.1, 0.05), null);   // 릴리스 아래 → 재무장
+  assert.equal(d.update(1.0, 0.05), "down"); // 다음 스트로크 1회
+});
+
 // 8) 손가락별 코드 매핑: 커스텀 매핑이 반영되고 4개는 항상 MUTE.
 test("buildChordsFromMapping: 커스텀 매핑 반영 + MUTE 고정", () => {
   assert.ok("Em" in CHORD_LIBRARY && "Dm" in CHORD_LIBRARY);

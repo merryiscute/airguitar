@@ -206,8 +206,9 @@ let strumThreshold = loadThreshold();
 
 const stabilizer = new FingerStabilizer(5);
 const wristV = new WristVelocity(0.6); // 평활 완화 → 빠른 동작 피크 보존
-// 임계값 낮춤 + 1프레임 확정 → 한 번 휘둘러도 잘 잡힘. 쿨다운으로 중복 방지.
-const strummer = new StrumDetector(strumThreshold, 1, 0.18);
+// 임계값 낮춤 + 1프레임 확정 → 한 번 휘둘러도 잘 잡힘.
+// 에지 트리거라 한 스트로크당 한 번만 발사(속도가 임계 아래로 떨어져야 재무장).
+const strummer = new StrumDetector(strumThreshold, 1, 0.12);
 const audio = new AudioEngine();
 
 let handLandmarker = null;
