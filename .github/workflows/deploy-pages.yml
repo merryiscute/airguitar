@@ -1,0 +1,40 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+      - claude/session-start-mlockp
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 한 번에 하나의 배포만. 진행 중 배포는 취소하지 않고 큐잉.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pages가 꺼져 있으면 켜고(enablement) 설정을 가져온다.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      # docs/ 전체를 정적 사이트 아티팩트로 업로드.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
