@@ -10,7 +10,7 @@ import {
   FingerStabilizer,
   WristVelocity,
   StrumDetector,
-} from "./logic.js?v=13";
+} from "./logic.js?v=14";
 
 // MediaPipe Tasks Vision은 init()에서 동적 import 한다.
 // 최상위 static import로 두면 CDN이 잠깐 안 될 때 모듈 전체가 죽어
@@ -481,10 +481,10 @@ function loop(tMs) {
   const strumLabel =
     lastStrum === "down" ? "↓ 다운" : lastStrum === "up" ? "↑ 업" : "-";
   elStrum.textContent = `스트럼: ${strumLabel}`;
-  // 진단: 엔진(GPU/CPU)과 손 인식 여부. 손이 안 잡히면 안내 문구.
-  elEngine.textContent = handFound
-    ? `엔진: ${delegateInUse} ✓`
-    : `엔진: ${delegateInUse} · 손바닥을 화면 안에 펴서 보여주세요`;
+  // 진단: 엔진 + 카메라/캔버스 실제 치수(정렬 문제 추적용).
+  const dpr = (window.devicePixelRatio || 1).toFixed(1);
+  const dbg = `cam ${video.videoWidth}×${video.videoHeight} · cv ${canvas.width}×${canvas.height} · dpr${dpr}`;
+  elEngine.textContent = `엔진: ${delegateInUse}${handFound ? " ✓" : ""} · ${dbg}`;
 
   requestAnimationFrame(loop);
 }
