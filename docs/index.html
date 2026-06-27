@@ -21,18 +21,31 @@
       </div>
     </div>
 
+    <button id="settings-btn" title="코드 설정">⚙</button>
+
+    <div id="settings" class="hidden">
+      <h2>코드 설정</h2>
+      <p>손가락 굽힌 개수마다 코드를 고르세요.</p>
+      <div class="rows" id="settings-rows"></div>
+      <div class="settings-actions">
+        <button id="settings-reset" class="ghost">기본값</button>
+        <button id="settings-save">저장</button>
+      </div>
+    </div>
+
     <div id="start-screen">
       <h1>🎸 에어 기타</h1>
       <p>오른손을 카메라에 비추세요.<br />
          손가락 <b>굽힌 개수</b>로 코드를 고르고,<br />
          손목을 <b>위·아래로 휘둘러</b> 스트럼하세요.</p>
-      <ul class="legend">
+      <ul class="legend" id="legend">
         <li><b>0개</b>(손 펴기) → C</li>
         <li><b>1개</b> → G</li>
         <li><b>2개</b> → Am</li>
         <li><b>3개</b> → F</li>
       </ul>
       <button id="start-btn">시작 (카메라 허용)</button>
+      <button id="config-btn" class="ghost">코드 설정</button>
       <p class="status" id="status"></p>
     </div>
   </div>

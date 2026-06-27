@@ -8,6 +8,9 @@ import assert from "node:assert/strict";
 import {
   noteToFreq,
   buildChords,
+  buildChordsFromMapping,
+  chordFromName,
+  CHORD_LIBRARY,
   countBent,
   dist,
   FingerStabilizer,
@@ -137,6 +140,28 @@ test("통합: 코드 선택 + 다운 스트럼 1회", () => {
     if (dir) fired = dir;
   }
   assert.equal(fired, "down");
+});
+
+// 8) 손가락별 코드 매핑: 커스텀 매핑이 반영되고 4개는 항상 MUTE.
+test("buildChordsFromMapping: 커스텀 매핑 반영 + MUTE 고정", () => {
+  assert.ok("Em" in CHORD_LIBRARY && "Dm" in CHORD_LIBRARY);
+  const c = chordFromName("Em");
+  assert.equal(c.name, "Em");
+  assert.equal(c.freqs.length, c.notes.length);
+  assert.ok(c.freqs.length > 0);
+
+  const chords = buildChordsFromMapping({ 0: "Em", 1: "Dm", 2: "A", 3: "E" });
+  assert.equal(chords[0].name, "Em");
+  assert.equal(chords[1].name, "Dm");
+  assert.equal(chords[2].name, "A");
+  assert.equal(chords[3].name, "E");
+  assert.equal(chords[4].name, "MUTE");
+  assert.equal(chords[4].freqs.length, 0);
+
+  // 누락된 칸은 기본값으로 채운다.
+  const partial = buildChordsFromMapping({ 0: "D" });
+  assert.equal(partial[0].name, "D");
+  assert.equal(partial[1].name, "G"); // DEFAULT_MAPPING[1]
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

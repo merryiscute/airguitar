@@ -3,7 +3,9 @@
 // 순수 로직은 logic.js, 여기서는 카메라/추론/오디오/렌더만 담당한다.
 
 import {
-  buildChords,
+  buildChordsFromMapping,
+  CHORD_LIBRARY,
+  DEFAULT_MAPPING,
   countBent,
   FingerStabilizer,
   WristVelocity,
@@ -20,7 +22,17 @@ const WASM =
 const MODEL =
   "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
 
-const CHORDS = buildChords();
+// 손가락→코드 매핑은 localStorage에 저장해 다음 방문에도 유지한다.
+const MAP_KEY = "airguitar.chordMapping";
+function loadMapping() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MAP_KEY));
+    if (saved && typeof saved === "object") return { ...DEFAULT_MAPPING, ...saved };
+  } catch {}
+  return { ...DEFAULT_MAPPING };
+}
+let mapping = loadMapping();
+let CHORDS = buildChordsFromMapping(mapping);
 
 // --- 오디오: Karplus-Strong 플럭 ------------------------------------------
 class AudioEngine {
@@ -88,6 +100,78 @@ const elEngine = document.getElementById("engine");
 const startScreen = document.getElementById("start-screen");
 const startBtn = document.getElementById("start-btn");
 const statusEl = document.getElementById("status");
+const legendEl = document.getElementById("legend");
+const settingsBtn = document.getElementById("settings-btn");
+const configBtn = document.getElementById("config-btn");
+const settingsPanel = document.getElementById("settings");
+const settingsRows = document.getElementById("settings-rows");
+const settingsSave = document.getElementById("settings-save");
+const settingsReset = document.getElementById("settings-reset");
+
+// --- 코드 설정 UI (손가락별 코드 선택) -------------------------------------
+const CHORD_NAMES = Object.keys(CHORD_LIBRARY); // MUTE 포함
+
+// 시작 화면 범례를 현재 매핑으로 다시 그린다.
+function renderLegend() {
+  if (!legendEl) return;
+  const labels = ["0개(손 펴기)", "1개", "2개", "3개"];
+  legendEl.innerHTML = "";
+  for (let i = 0; i <= 3; i++) {
+    const li = document.createElement("li");
+    li.innerHTML = `<b>${labels[i]}</b> → ${mapping[i]}`;
+    legendEl.appendChild(li);
+  }
+}
+
+// 설정 패널의 드롭다운들을 현재 매핑으로 채운다.
+function buildSettingsUI() {
+  settingsRows.innerHTML = "";
+  for (let i = 0; i <= 3; i++) {
+    const row = document.createElement("label");
+    row.className = "settings-row";
+    const span = document.createElement("span");
+    span.textContent = `${i}개`;
+    const sel = document.createElement("select");
+    sel.dataset.count = String(i);
+    for (const name of CHORD_NAMES) {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      if (name === mapping[i]) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    row.append(span, sel);
+    settingsRows.appendChild(row);
+  }
+}
+
+function openSettings() {
+  buildSettingsUI();
+  settingsPanel.classList.remove("hidden");
+}
+function closeSettings() {
+  settingsPanel.classList.add("hidden");
+}
+
+settingsBtn?.addEventListener("click", openSettings);
+configBtn?.addEventListener("click", openSettings);
+
+settingsSave?.addEventListener("click", () => {
+  for (const sel of settingsRows.querySelectorAll("select")) {
+    mapping[sel.dataset.count] = sel.value;
+  }
+  try { localStorage.setItem(MAP_KEY, JSON.stringify(mapping)); } catch {}
+  CHORDS = buildChordsFromMapping(mapping);
+  renderLegend();
+  closeSettings();
+});
+
+settingsReset?.addEventListener("click", () => {
+  mapping = { ...DEFAULT_MAPPING };
+  buildSettingsUI();
+});
+
+renderLegend();
 
 const stabilizer = new FingerStabilizer(5);
 const wristV = new WristVelocity(0.5);
