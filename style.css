@@ -1,0 +1,97 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: #111;
+  color: #eee;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+}
+
+#stage {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 비디오는 캔버스 뒤에 깔고, 캔버스에 거울 반전해서 그림 */
+#video { display: none; }
+
+#canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* HUD 오버레이 */
+#hud {
+  position: absolute;
+  top: 0; left: 0;
+  padding: 16px;
+  pointer-events: none;
+  text-shadow: 0 1px 4px #000;
+}
+
+#hud .chord {
+  font-size: 22vw;
+  font-weight: 800;
+  line-height: 1;
+  color: #4ade80;
+}
+
+#hud .meta {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 16px;
+  color: #ddd;
+}
+
+/* 시작 화면 */
+#start-screen {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 10, 14, 0.92);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+  gap: 16px;
+  z-index: 10;
+}
+
+#start-screen.hidden { display: none; }
+
+#start-screen h1 { font-size: 40px; }
+#start-screen p { font-size: 16px; line-height: 1.6; color: #cbd5e1; }
+
+.legend {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 15px;
+  color: #94a3b8;
+}
+.legend b { color: #4ade80; }
+
+#start-btn {
+  margin-top: 8px;
+  padding: 16px 28px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #07210f;
+  background: #4ade80;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+#start-btn:active { transform: scale(0.97); }
+
+.status { font-size: 14px; color: #f87171; min-height: 20px; }
