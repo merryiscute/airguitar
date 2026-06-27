@@ -35,7 +35,7 @@ python3 -m http.server 8000 --directory docs
 
 ## 로직 검증 (브라우저/카메라 없이)
 ```bash
-node tests/web_logic.test.mjs   # 파이썬 테스트와 동일 시나리오, 7개 통과
+node tests/web_logic.test.mjs   # 순수 로직 검증, 8개 통과
 ```
 
 ## 튜닝 포인트 (`app.js` / `logic.js`)

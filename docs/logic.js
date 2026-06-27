@@ -20,17 +20,48 @@ export function noteToFreq(note) {
   return 440 * Math.pow(2, (midi - 69) / 12);
 }
 
-// --- 코드 프리셋 (presets.json과 동일) -------------------------------------
+// --- 코드 라이브러리 (이름 → 음이름) ---------------------------------------
+// 손가락별로 자유롭게 고를 수 있도록 흔한 코드를 모아둔다.
+export const CHORD_LIBRARY = {
+  C:  ["C3","E3","G3","C4","E4"],
+  D:  ["D3","A3","D4","F#4","A4"],
+  E:  ["E2","B2","E3","G#3","B3"],
+  F:  ["F2","A2","C3","F3","A3"],
+  G:  ["G2","B2","D3","G3","B3"],
+  A:  ["A2","E3","A3","C#4","E4"],
+  B:  ["B2","F#3","B3","D#4","F#4"],
+  Am: ["A2","E3","A3","C4","E4"],
+  Bm: ["B2","F#3","B3","D4","F#4"],
+  Cm: ["C3","G3","C4","D#4","G4"],
+  Dm: ["D3","A3","D4","F4","A4"],
+  Em: ["E2","B2","E3","G3","B3"],
+  Fm: ["F2","C3","F3","G#3","C4"],
+  Gm: ["G2","D3","G3","A#3","D4"],
+  MUTE: [],
+};
+
+// 코드 이름 하나로 { name, notes, freqs } 객체를 만든다.
+export function chordFromName(name) {
+  const notes = CHORD_LIBRARY[name] ?? [];
+  return { name, notes, freqs: notes.map(noteToFreq) };
+}
+
+// 손가락 개수(0~3) → 코드 이름 기본 매핑.
+export const DEFAULT_MAPPING = { 0: "C", 1: "G", 2: "Am", 3: "F" };
+
+// 매핑 { 0:"C", 1:"G", ... }으로 count→코드 객체를 만든다. 4개는 항상 MUTE.
+export function buildChordsFromMapping(mapping = DEFAULT_MAPPING) {
+  const out = {};
+  for (let i = 0; i <= 3; i++) {
+    out[i] = chordFromName(mapping?.[i] ?? DEFAULT_MAPPING[i]);
+  }
+  out[4] = chordFromName("MUTE");
+  return out;
+}
+
+// --- 코드 프리셋 (기본 매핑) -----------------------------------------------
 export function buildChords() {
-  const raw = {
-    0: { name: "C",  notes: ["C3","E3","G3","C4","E4"] },
-    1: { name: "G",  notes: ["G2","B2","D3","G3","B3"] },
-    2: { name: "Am", notes: ["A2","E3","A3","C4","E4"] },
-    3: { name: "F",  notes: ["F2","A2","C3","F3","A3"] },
-    4: { name: "MUTE", notes: [] },
-  };
-  for (const c of Object.values(raw)) c.freqs = c.notes.map(noteToFreq);
-  return raw;
+  return buildChordsFromMapping(DEFAULT_MAPPING);
 }
 
 // --- 특징: 손가락 굽힘 ------------------------------------------------------

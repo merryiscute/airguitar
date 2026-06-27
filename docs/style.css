@@ -95,3 +95,93 @@ html, body {
 #start-btn:active { transform: scale(0.97); }
 
 .status { font-size: 14px; color: #f87171; min-height: 20px; }
+
+/* 보조 버튼(고스트) */
+.ghost {
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #4ade80;
+  background: transparent;
+  border: 1px solid #4ade80;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.ghost:active { transform: scale(0.97); }
+
+/* 설정 톱니 버튼 (플레이 중 우상단) */
+#settings-btn {
+  position: absolute;
+  top: 12px; right: 12px;
+  z-index: 11;
+  width: 44px; height: 44px;
+  font-size: 22px;
+  line-height: 1;
+  color: #eee;
+  background: rgba(10, 10, 14, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  cursor: pointer;
+}
+#settings-btn:active { transform: scale(0.94); }
+
+/* 코드 설정 패널 */
+#settings {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(10, 10, 14, 0.95);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+}
+#settings.hidden { display: none; }
+#settings h2 { font-size: 26px; }
+#settings p { font-size: 15px; color: #cbd5e1; }
+
+#settings .rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 320px;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #4ade80;
+}
+.settings-row select {
+  flex: 1;
+  max-width: 200px;
+  padding: 12px;
+  font-size: 16px;
+  color: #eee;
+  background: #1b1b22;
+  border: 1px solid #3a3a44;
+  border-radius: 10px;
+}
+.settings-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+#settings-save {
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #07210f;
+  background: #4ade80;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+#settings-save:active { transform: scale(0.97); }
