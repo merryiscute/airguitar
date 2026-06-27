@@ -35,15 +35,17 @@ function makeHand(fingers, wristY = 0.5) {
   const lm = new Array(21).fill(null).map(() => ({ x: 0.5, y: 0.5 }));
   lm[WRIST] = { x: 0.5, y: wristY };
   const groups = [
-    [5, 8],
-    [9, 12],
-    [13, 16],
-    [17, 20],
+    [5, 6, 8],    // MCP, PIP, TIP
+    [9, 10, 12],
+    [13, 14, 16],
+    [17, 18, 20],
   ];
-  groups.forEach(([mcp, tip], i) => {
+  groups.forEach(([mcp, pip, tip], i) => {
     const bent = fingers[i]?.bent;
-    // 펴짐: tip이 손목에서 멀다. 굽힘: tip이 손목 가까이 온다.
+    // PIP는 손목에서 중간 거리에 고정. 폄: tip이 PIP보다 멀다.
+    // 굽힘: tip이 손목 가까이 접혀 PIP보다 가까워진다.
     lm[mcp] = { x: 0.5, y: wristY - 0.15 };
+    lm[pip] = { x: 0.5, y: wristY - 0.25 };
     lm[tip] = { x: 0.5, y: bent ? wristY - 0.10 : wristY - 0.40 };
   });
   return lm;

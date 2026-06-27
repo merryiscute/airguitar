@@ -1,13 +1,13 @@
 // 순수 로직(브라우저 의존성 없음) — 파이썬 src/features,chords,strum 포팅.
 // 브라우저(app.js)와 Node 테스트(tests/web_logic.test.mjs) 양쪽에서 import 한다.
 
-// --- 랜드마크 인덱스 (검지~새끼: MCP, TIP) ---------------------------------
+// --- 랜드마크 인덱스 (검지~새끼: MCP, PIP, TIP) ----------------------------
 export const WRIST = 0;
 export const FINGERS = [
-  [5, 8],   // index
-  [9, 12],  // middle
-  [13, 16], // ring
-  [17, 20], // pinky
+  [5, 6, 8],    // index:  MCP, PIP, TIP
+  [9, 10, 12],  // middle
+  [13, 14, 16], // ring
+  [17, 18, 20], // pinky
 ];
 
 // --- 음이름 → 주파수 --------------------------------------------------------
@@ -40,8 +40,11 @@ export function dist(a, b) {
 export function countBent(lm) {
   const wrist = lm[WRIST];
   let n = 0;
-  for (const [mcp, tip] of FINGERS) {
-    if (dist(lm[tip], wrist) < dist(lm[mcp], wrist)) n++;
+  // 폄: 손끝(TIP)이 가운데 관절(PIP)보다 손목에서 더 멀다.
+  // 굽힘: 손끝이 손바닥 쪽으로 접혀 PIP보다 손목에 가까워진다.
+  // (MCP가 아니라 PIP 기준이라 손 기울기에 덜 민감하다.)
+  for (const [, pip, tip] of FINGERS) {
+    if (dist(lm[tip], wrist) < dist(lm[pip], wrist)) n++;
   }
   return n;
 }
