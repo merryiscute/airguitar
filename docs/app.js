@@ -34,25 +34,76 @@ function loadMapping() {
 let mapping = loadMapping();
 let CHORDS = buildChordsFromMapping(mapping);
 
-// --- 오디오: Karplus-Strong 플럭 ------------------------------------------
+// --- 오디오: Karplus-Strong 플럭 + 바디 공명/리버브 체인 -------------------
+// 더 사실적인 어쿠스틱 기타 톤을 위해:
+//  · 픽을 부드럽게(저역통과 여기) + DC 제거
+//  · 주파수별 감쇠(저음 길게, 고음 짧게)
+//  · 기타 바디 공명 EQ + 고역 롤오프(따뜻함)
+//  · 절차적 임펄스 컨볼루션 리버브 + 컴프레서
+//  · 현마다 미세한 디튠/세기/스테레오 퍼짐
 class AudioEngine {
   constructor() {
     this.ctx = null;
-    this.master = null;
-    this.duration = 1.6;
-    this.decay = 0.9965;
-    this.spread = 0.025; // 스트럼 음 간격(초)
+    this.busInput = null;  // 모든 현이 모이는 입력 버스
+    this.duration = 2.2;
+    this.spread = 0.022;   // 스트럼 음 간격(초)
     this.bufferCache = new Map();
   }
+
   resume() {
     if (!this.ctx) {
-      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      this.master = this.ctx.createGain();
-      this.master.gain.value = 0.25;
-      this.master.connect(this.ctx.destination);
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.ctx = ctx;
+
+      this.busInput = ctx.createGain();
+      this.busInput.gain.value = 0.9;
+
+      // 기타 바디 공명 + 따뜻함
+      const body1 = ctx.createBiquadFilter();
+      body1.type = "peaking"; body1.frequency.value = 100; body1.Q.value = 1.0; body1.gain.value = 4;
+      const body2 = ctx.createBiquadFilter();
+      body2.type = "peaking"; body2.frequency.value = 240; body2.Q.value = 1.2; body2.gain.value = 3;
+      const warmth = ctx.createBiquadFilter();
+      warmth.type = "highshelf"; warmth.frequency.value = 3800; warmth.gain.value = -5;
+      const tone = ctx.createBiquadFilter();
+      tone.type = "lowpass"; tone.frequency.value = 7000; tone.Q.value = 0.7;
+
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -18; comp.knee.value = 24; comp.ratio.value = 3;
+      comp.attack.value = 0.003; comp.release.value = 0.25;
+
+      // 절차적 리버브(공간감)
+      const conv = ctx.createConvolver();
+      conv.buffer = this._makeImpulse(1.8, 3.0);
+      const wet = ctx.createGain(); wet.gain.value = 0.18;
+      const dry = ctx.createGain(); dry.gain.value = 1.0;
+
+      const master = ctx.createGain();
+      master.gain.value = 0.3;
+
+      this.busInput.connect(body1);
+      body1.connect(body2); body2.connect(warmth); warmth.connect(tone); tone.connect(comp);
+      comp.connect(dry); dry.connect(master);
+      comp.connect(conv); conv.connect(wet); wet.connect(master);
+      master.connect(ctx.destination);
     }
     if (this.ctx.state === "suspended") this.ctx.resume();
   }
+
+  // 간단한 감쇠 노이즈로 작은 룸 임펄스 응답을 만든다.
+  _makeImpulse(seconds = 1.8, decay = 3.0) {
+    const sr = this.ctx.sampleRate;
+    const len = Math.max(1, Math.floor(seconds * sr));
+    const imp = this.ctx.createBuffer(2, len, sr);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = imp.getChannelData(ch);
+      for (let i = 0; i < len; i++) {
+        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+      }
+    }
+    return imp;
+  }
+
   _karplusBuffer(freq) {
     const key = Math.round(freq);
     if (this.bufferCache.has(key)) return this.bufferCache.get(key);
@@ -61,28 +112,59 @@ class AudioEngine {
     const buf = this.ctx.createBuffer(1, total, sr);
     const data = buf.getChannelData(0);
     const n = Math.max(2, Math.round(sr / freq));
+
+    // 픽 부드러움: 화이트노이즈를 1극 저역통과로 완화한 여기.
     const ks = new Float32Array(n);
-    for (let i = 0; i < n; i++) ks[i] = Math.random() * 2 - 1;
+    let lp = 0;
+    const soft = 0.45; // 0=거침, 1=매우 부드러움
+    for (let i = 0; i < n; i++) {
+      const white = Math.random() * 2 - 1;
+      lp = soft * lp + (1 - soft) * white;
+      ks[i] = lp;
+    }
+    // DC 제거(평균 0)로 둔탁한 저역 처짐 방지.
+    let mean = 0;
+    for (let i = 0; i < n; i++) mean += ks[i];
+    mean /= n;
+    for (let i = 0; i < n; i++) ks[i] -= mean;
+
+    // 주파수별 감쇠: 저음은 길게, 고음은 짧게 울린다.
+    const decay = Math.max(0.992, 0.9975 - freq * 5e-6);
+
     let idx = 0;
     for (let i = 0; i < total; i++) {
       const cur = ks[idx];
       const nxt = ks[(idx + 1) % n];
-      ks[idx] = this.decay * 0.5 * (cur + nxt);
+      ks[idx] = decay * 0.5 * (cur + nxt);
       data[i] = cur;
       idx = (idx + 1) % n;
     }
     this.bufferCache.set(key, buf);
     return buf;
   }
+
   strum(chord, direction) {
     if (!chord || chord.freqs.length === 0) return;
     let freqs = [...chord.freqs].sort((a, b) => a - b); // 저→고
     if (direction === "up") freqs.reverse();
     const now = this.ctx.currentTime;
+    const n = freqs.length;
     freqs.forEach((f, i) => {
       const src = this.ctx.createBufferSource();
       src.buffer = this._karplusBuffer(f);
-      src.connect(this.master);
+      src.detune.value = (Math.random() * 2 - 1) * 6; // ±6센트 미세 디튠
+
+      const g = this.ctx.createGain();
+      g.gain.value = 0.85 + Math.random() * 0.3;       // 피킹 세기 변화
+
+      src.connect(g);
+      if (this.ctx.createStereoPanner) {
+        const pan = this.ctx.createStereoPanner();
+        pan.pan.value = (i / Math.max(1, n - 1) - 0.5) * 0.5; // 현마다 좌우 퍼짐
+        g.connect(pan); pan.connect(this.busInput);
+      } else {
+        g.connect(this.busInput);
+      }
       src.start(now + i * this.spread);
     });
   }
