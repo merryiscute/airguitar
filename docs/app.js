@@ -10,7 +10,7 @@ import {
   FingerStabilizer,
   WristVelocity,
   StrumDetector,
-} from "./logic.js?v=15";
+} from "./logic.js?v=16";
 
 // MediaPipe Tasks Vision은 init()에서 동적 import 한다.
 // 최상위 static import로 두면 CDN이 잠깐 안 될 때 모듈 전체가 죽어
@@ -21,6 +21,24 @@ const WASM =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
 const MODEL =
   "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+// 팔(자세) 추적용 — 가벼운 lite 모델로 속도 확보.
+const POSE_MODEL =
+  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+
+// 자세 랜드마크 인덱스(BlazePose). 어깨–팔꿈치–손목 좌/우.
+const POSE_IDX = {
+  L_SHOULDER: 11, R_SHOULDER: 12,
+  L_ELBOW: 13, R_ELBOW: 14,
+  L_WRIST: 15, R_WRIST: 16,
+};
+// 더 잘 보이는 쪽 팔을 고른다(오른팔 우선이되, 왼팔만 보이면 왼팔).
+function pickArm(pl) {
+  const r = pl[POSE_IDX.R_WRIST], l = pl[POSE_IDX.L_WRIST];
+  const rv = r?.visibility ?? 1, lv = l?.visibility ?? 1;
+  return rv >= lv
+    ? { wrist: r, elbow: pl[POSE_IDX.R_ELBOW], shoulder: pl[POSE_IDX.R_SHOULDER] }
+    : { wrist: l, elbow: pl[POSE_IDX.L_ELBOW], shoulder: pl[POSE_IDX.L_SHOULDER] };
+}
 
 // 손가락→코드 매핑은 localStorage에 저장해 다음 방문에도 유지한다.
 const MAP_KEY = "airguitar.chordMapping";
@@ -287,25 +305,29 @@ function loadThreshold() {
 let strumThreshold = loadThreshold();
 
 const stabilizer = new FingerStabilizer(5);
-const wristV = new WristVelocity(0.6); // 평활 완화 → 빠른 동작 피크 보존
+// 팔(자세) 손목의 수직 속도로 스트럼을 감지한다.
+const armV = new WristVelocity(0.6); // 평활 완화 → 빠른 동작 피크 보존
 // 임계값 낮춤 + 1프레임 확정 → 한 번 휘둘러도 잘 잡힘.
 // 에지 트리거라 한 스트로크당 한 번만 발사(속도가 임계 아래로 떨어져야 재무장).
 const strummer = new StrumDetector(strumThreshold, 1, 0.12);
 const audio = new AudioEngine();
 
 let handLandmarker = null;
+let poseLandmarker = null;
 let lastTime = null;
 let lastStrum = "-";
 
-// 짧은 인식 공백(모션 블러 등)을 메우는 유예. 이 시간 안에 손이 다시
+// 짧은 인식 공백(모션 블러 등)을 메우는 유예. 이 시간 안에 손/팔이 다시
 // 잡히면 직전 코드/속도 상태를 이어가 깜빡임·끊김을 줄인다.
 const HOLD_S = 0.2;
 let lastHandT = null; // 마지막으로 손을 본 시각(초)
 let lastCount = null; // 직전 안정화된 손가락 수
 let lastChord = null; // 직전 코드
+let lastArmT = null;  // 마지막으로 팔을 본 시각(초)
 
-// 손 추적 엔진 상태(진단/자동 폴백용).
+// 추적 엔진 상태(진단/자동 폴백용).
 let HandLandmarkerClass = null; // 동적 import 한 클래스 보관
+let PoseLandmarkerClass = null;
 let vision = null;             // FilesetResolver 결과 보관
 let delegateInUse = "-";       // "GPU" | "CPU"
 let everDetected = false;      // 손이 한 번이라도 잡혔는지
@@ -324,17 +346,29 @@ async function makeLandmarker(delegate) {
   });
 }
 
-// GPU에서 손이 영영 안 잡히는 기기를 위해 CPU로 한 번 갈아끼운다.
+// PoseLandmarker 생성(팔 추적).
+async function makePose(delegate) {
+  return PoseLandmarkerClass.createFromOptions(vision, {
+    baseOptions: { modelAssetPath: POSE_MODEL, delegate },
+    runningMode: "VIDEO",
+    numPoses: 1,
+    minPoseDetectionConfidence: 0.4,
+    minPosePresenceConfidence: 0.4,
+    minTrackingConfidence: 0.4,
+  });
+}
+
+// GPU에서 안 잡히는 기기를 위해 손+자세 모두 CPU로 한 번 갈아끼운다.
 async function swapToCpu() {
   cpuFallbackTried = true;
   try {
-    const cpu = await makeLandmarker("CPU");
-    handLandmarker?.close?.();
-    handLandmarker = cpu;
+    const [h, p] = await Promise.all([makeLandmarker("CPU"), makePose("CPU")]);
+    handLandmarker?.close?.(); handLandmarker = h;
+    poseLandmarker?.close?.(); poseLandmarker = p;
     delegateInUse = "CPU";
     everDetected = false;
     detectStart = null;
-    console.info("GPU에서 손 미검출 → CPU 델리게이트로 전환");
+    console.info("GPU 미검출 → CPU 델리게이트로 전환(손+자세)");
   } catch (e) {
     console.error("CPU 폴백 실패:", e);
   }
@@ -342,18 +376,21 @@ async function swapToCpu() {
 
 async function init() {
   statusEl.textContent = "라이브러리 로딩 중…";
-  const { HandLandmarker, FilesetResolver } = await import(VISION);
+  const { HandLandmarker, PoseLandmarker, FilesetResolver } = await import(VISION);
   HandLandmarkerClass = HandLandmarker;
+  PoseLandmarkerClass = PoseLandmarker;
 
-  statusEl.textContent = "모델 로딩 중…";
+  statusEl.textContent = "모델 로딩 중… (손 + 팔)";
   vision = await FilesetResolver.forVisionTasks(WASM);
-  // GPU 우선, 생성 실패 시 CPU로.
+  // GPU 우선, 생성 실패 시 CPU로. 손/팔 모델 모두.
   try {
     handLandmarker = await makeLandmarker("GPU");
+    poseLandmarker = await makePose("GPU");
     delegateInUse = "GPU";
   } catch (e) {
     console.warn("GPU 델리게이트 생성 실패 → CPU:", e);
     handLandmarker = await makeLandmarker("CPU");
+    poseLandmarker = await makePose("CPU");
     delegateInUse = "CPU";
     cpuFallbackTried = true;
   }
@@ -393,8 +430,9 @@ function loop(tMs) {
   ctx2d.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
   ctx2d.restore();
 
-  let chord = null, count = null, vY = 0, handFound = false;
+  let chord = null, count = null, vY = 0, handFound = false, armFound = false;
 
+  // --- 손: 손가락으로 코드 선택 ---
   if (handLandmarker) {
     if (detectStart === null) detectStart = t;
     const res = handLandmarker.detectForVideo(video, tMs);
@@ -404,27 +442,17 @@ function loop(tMs) {
       const lm = res.landmarks[0];
       count = stabilizer.update(countBent(lm));
       chord = CHORDS[count] ?? null;
-      // 공백을 건너뛴 경우, 마지막으로 본 시점부터의 실제 경과시간으로
-      // 속도를 계산(블러 중 일어난 스트럼도 재포착 때 살아난다). HOLD_S로 상한.
-      const vdt = lastHandT === null ? dt : Math.min(t - lastHandT, HOLD_S);
-      vY = wristV.update(lm, vdt);
-      const dir = strummer.update(vY, vdt);
-      // 다운스트로크에서만 소리. 업은 인식만 하고 음 없음.
-      if (dir && chord) {
-        lastStrum = dir;
-        if (dir === "down") audio.strum(chord, dir);
-      }
       drawHand(lm, chord);
       lastHandT = t; lastCount = count; lastChord = chord;
     } else {
       const sinceHand = lastHandT === null ? Infinity : t - lastHandT;
       if (sinceHand < HOLD_S) {
-        // 유예 중: 직전 코드 유지(깜빡임 방지). 속도/스트럼 상태는 보존만 한다.
+        // 유예 중: 직전 코드 유지(깜빡임 방지).
         handFound = true;
         count = lastCount;
         chord = lastChord;
       } else {
-        stabilizer.reset(); wristV.reset(); strummer.reset();
+        stabilizer.reset();
         lastHandT = null; lastCount = null; lastChord = null;
       }
     }
@@ -436,25 +464,50 @@ function loop(tMs) {
     }
   }
 
+  // --- 팔(자세): 손목의 수직 움직임으로 스트럼 ---
+  if (poseLandmarker) {
+    const pres = poseLandmarker.detectForVideo(video, tMs);
+    const pl = pres.landmarks && pres.landmarks[0];
+    const arm = pl ? pickArm(pl) : null;
+    if (arm && arm.wrist && (arm.wrist.visibility === undefined || arm.wrist.visibility > 0.3)) {
+      armFound = true;
+      const avdt = lastArmT === null ? dt : Math.min(t - lastArmT, HOLD_S);
+      vY = armV.updateY(arm.wrist.y, avdt);
+      const dir = strummer.update(vY, avdt);
+      // 다운스트로크에서만 소리. 업은 인식만 하고 음 없음.
+      if (dir && chord) {
+        lastStrum = dir;
+        if (dir === "down") audio.strum(chord, dir);
+      }
+      drawArm(arm);
+      lastArmT = t;
+    } else {
+      const sinceArm = lastArmT === null ? Infinity : t - lastArmT;
+      if (sinceArm >= HOLD_S) {
+        armV.reset(); strummer.reset(); lastArmT = null;
+      }
+    }
+  }
+
   elChord.textContent = chord ? chord.name : "-";
   elCount.textContent = `손가락: ${count ?? "-"}`;
 
-  // 팔(손목) 움직임: 방향 + 속도. v_y>0 = 아래로, v_y<0 = 위로(이미지 y는 아래로 증가).
+  // 팔 움직임: 방향 + 속도. v_y>0 = 아래로, v_y<0 = 위로(이미지 y는 아래로 증가).
   const speed = Math.abs(vY);
   const DEAD = 0.15; // 이 속도 미만은 정지로 본다
   let moveDir = "– 정지", moveColor = "#94a3b8";
-  if (vY > DEAD) { moveDir = "↓ 아래"; moveColor = "#4ade80"; }
+  if (vY > DEAD) { moveDir = "↓ 아래"; moveColor = "#fb923c"; }
   else if (vY < -DEAD) { moveDir = "↑ 위"; moveColor = "#38bdf8"; }
-  elVy.textContent = `움직임: ${moveDir} · 속도 ${speed.toFixed(2)}`;
+  elVy.textContent = `팔: ${moveDir} · 속도 ${speed.toFixed(2)}`;
   elVy.style.color = moveColor;
 
   const strumLabel =
     lastStrum === "down" ? "↓ 다운" : lastStrum === "up" ? "↑ 업" : "-";
   elStrum.textContent = `스트럼: ${strumLabel}`;
-  // 진단: 엔진 + 카메라/캔버스 실제 치수(정렬 문제 추적용).
+  // 진단: 엔진 + 손/팔 인식 + 카메라 치수.
   const dpr = (window.devicePixelRatio || 1).toFixed(1);
-  const dbg = `cam ${video.videoWidth}×${video.videoHeight} · cv ${canvas.width}×${canvas.height} · dpr${dpr}`;
-  elEngine.textContent = `엔진: ${delegateInUse}${handFound ? " ✓" : ""} · ${dbg}`;
+  const dbg = `손${handFound ? "✓" : "·"} 팔${armFound ? "✓" : "·"} · cam ${video.videoWidth}×${video.videoHeight} · dpr${dpr}`;
+  elEngine.textContent = `엔진: ${delegateInUse} · ${dbg}`;
 
   requestAnimationFrame(loop);
 }
@@ -523,6 +576,31 @@ function drawHand(lm, chord) {
   ctx2d.fillStyle = "#06222b";
   ctx2d.textBaseline = "middle";
   ctx2d.fillText(label, boxLeftOnScreen + 8, Math.max(17, boxTopOnScreen - 17));
+  ctx2d.restore();
+}
+
+// 스트럼에 쓰는 팔(어깨–팔꿈치–손목)을 주황색으로 그린다.
+function drawArm(arm) {
+  const W = canvas.width, H = canvas.height;
+  const pts = [arm.shoulder, arm.elbow, arm.wrist].filter(Boolean);
+  if (pts.length < 2) return;
+  ctx2d.save();
+  ctx2d.scale(-1, 1);
+  ctx2d.translate(-W, 0);
+  ctx2d.strokeStyle = "rgba(251, 146, 60, 0.9)"; // 주황
+  ctx2d.lineWidth = 6;
+  ctx2d.lineCap = "round";
+  ctx2d.lineJoin = "round";
+  ctx2d.beginPath();
+  ctx2d.moveTo(pts[0].x * W, pts[0].y * H);
+  for (let i = 1; i < pts.length; i++) ctx2d.lineTo(pts[i].x * W, pts[i].y * H);
+  ctx2d.stroke();
+  ctx2d.fillStyle = "#fb923c";
+  for (const p of pts) {
+    ctx2d.beginPath();
+    ctx2d.arc(p.x * W, p.y * H, 8, 0, Math.PI * 2);
+    ctx2d.fill();
+  }
   ctx2d.restore();
 }
 

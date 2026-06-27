@@ -101,17 +101,18 @@ export class FingerStabilizer {
   reset() { this.history = []; this.stable = null; }
 }
 
-// --- 손목 수직 속도(EMA) ----------------------------------------------------
+// --- 수직 속도(EMA) ---------------------------------------------------------
+// 손목/팔꿈치 등 어떤 점이든 y값으로 수직 속도를 구한다.
 export class WristVelocity {
   constructor(alpha = 0.5) { this.alpha = alpha; this.prevY = null; this.vY = 0; }
-  update(lm, dt) {
-    const y = lm[WRIST].y;
+  updateY(y, dt) {
     if (this.prevY === null || dt <= 0) { this.prevY = y; return this.vY; }
     const raw = (y - this.prevY) / dt;
     this.vY = this.alpha * raw + (1 - this.alpha) * this.vY;
     this.prevY = y;
     return this.vY;
   }
+  update(lm, dt) { return this.updateY(lm[WRIST].y, dt); }
   reset() { this.prevY = null; this.vY = 0; }
 }
 
