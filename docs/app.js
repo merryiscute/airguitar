@@ -107,6 +107,8 @@ const settingsPanel = document.getElementById("settings");
 const settingsRows = document.getElementById("settings-rows");
 const settingsSave = document.getElementById("settings-save");
 const settingsReset = document.getElementById("settings-reset");
+const sensRange = document.getElementById("sens-range");
+const sensVal = document.getElementById("sens-val");
 
 // --- 코드 설정 UI (손가락별 코드 선택) -------------------------------------
 const CHORD_NAMES = Object.keys(CHORD_LIBRARY); // MUTE 포함
@@ -145,8 +147,16 @@ function buildSettingsUI() {
   }
 }
 
+// 감도 슬라이더를 현재 임계값으로 맞춘다.
+function syncSensUI() {
+  if (!sensRange) return;
+  sensRange.value = String(strumThreshold);
+  sensVal.textContent = `임계값 ${strumThreshold.toFixed(2)}`;
+}
+
 function openSettings() {
   buildSettingsUI();
+  syncSensUI();
   settingsPanel.classList.remove("hidden");
 }
 function closeSettings() {
@@ -155,6 +165,14 @@ function closeSettings() {
 
 settingsBtn?.addEventListener("click", openSettings);
 configBtn?.addEventListener("click", openSettings);
+
+// 슬라이더는 즉시 반영(저장)되어 연주 중에도 바로 체감된다.
+sensRange?.addEventListener("input", () => {
+  strumThreshold = parseFloat(sensRange.value);
+  strummer.threshold = strumThreshold;
+  try { localStorage.setItem(SENS_KEY, String(strumThreshold)); } catch {}
+  sensVal.textContent = `임계값 ${strumThreshold.toFixed(2)}`;
+});
 
 settingsSave?.addEventListener("click", () => {
   for (const sel of settingsRows.querySelectorAll("select")) {
@@ -168,14 +186,28 @@ settingsSave?.addEventListener("click", () => {
 
 settingsReset?.addEventListener("click", () => {
   mapping = { ...DEFAULT_MAPPING };
+  strumThreshold = DEFAULT_THRESHOLD;
+  strummer.threshold = strumThreshold;
+  try { localStorage.setItem(SENS_KEY, String(strumThreshold)); } catch {}
   buildSettingsUI();
+  syncSensUI();
 });
 
 renderLegend();
 
+// 스트럼 감도(임계값)도 저장한다. 값이 작을수록 더 민감(쉽게 발동).
+const SENS_KEY = "airguitar.strumThreshold";
+const DEFAULT_THRESHOLD = 0.7;
+function loadThreshold() {
+  const v = parseFloat(localStorage.getItem(SENS_KEY));
+  return Number.isFinite(v) ? v : DEFAULT_THRESHOLD;
+}
+let strumThreshold = loadThreshold();
+
 const stabilizer = new FingerStabilizer(5);
-const wristV = new WristVelocity(0.5);
-const strummer = new StrumDetector(1.2, 2, 0.08);
+const wristV = new WristVelocity(0.6); // 평활 완화 → 빠른 동작 피크 보존
+// 임계값 낮춤 + 1프레임 확정 → 한 번 휘둘러도 잘 잡힘. 쿨다운으로 중복 방지.
+const strummer = new StrumDetector(strumThreshold, 1, 0.18);
 const audio = new AudioEngine();
 
 let handLandmarker = null;
