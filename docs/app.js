@@ -84,6 +84,7 @@ const elChord = document.getElementById("chord");
 const elCount = document.getElementById("count");
 const elVy = document.getElementById("vy");
 const elStrum = document.getElementById("strum");
+const elEngine = document.getElementById("engine");
 const startScreen = document.getElementById("start-screen");
 const startBtn = document.getElementById("start-btn");
 const statusEl = document.getElementById("status");
@@ -97,17 +98,59 @@ let handLandmarker = null;
 let lastTime = null;
 let lastStrum = "-";
 
+// 손 추적 엔진 상태(진단/자동 폴백용).
+let HandLandmarkerClass = null; // 동적 import 한 클래스 보관
+let vision = null;             // FilesetResolver 결과 보관
+let delegateInUse = "-";       // "GPU" | "CPU"
+let everDetected = false;      // 손이 한 번이라도 잡혔는지
+let detectStart = null;        // 첫 추론 시각(초)
+let cpuFallbackTried = false;  // GPU→CPU 자동 전환 1회 제한
+
+// HandLandmarker 생성. 임계값을 낮춰 더 너그럽게 잡는다.
+async function makeLandmarker(delegate) {
+  return HandLandmarkerClass.createFromOptions(vision, {
+    baseOptions: { modelAssetPath: MODEL, delegate },
+    runningMode: "VIDEO",
+    numHands: 1,
+    minHandDetectionConfidence: 0.3,
+    minHandPresenceConfidence: 0.3,
+    minTrackingConfidence: 0.3,
+  });
+}
+
+// GPU에서 손이 영영 안 잡히는 기기를 위해 CPU로 한 번 갈아끼운다.
+async function swapToCpu() {
+  cpuFallbackTried = true;
+  try {
+    const cpu = await makeLandmarker("CPU");
+    handLandmarker?.close?.();
+    handLandmarker = cpu;
+    delegateInUse = "CPU";
+    everDetected = false;
+    detectStart = null;
+    console.info("GPU에서 손 미검출 → CPU 델리게이트로 전환");
+  } catch (e) {
+    console.error("CPU 폴백 실패:", e);
+  }
+}
+
 async function init() {
   statusEl.textContent = "라이브러리 로딩 중…";
   const { HandLandmarker, FilesetResolver } = await import(VISION);
+  HandLandmarkerClass = HandLandmarker;
 
   statusEl.textContent = "모델 로딩 중…";
-  const vision = await FilesetResolver.forVisionTasks(WASM);
-  handLandmarker = await HandLandmarker.createFromOptions(vision, {
-    baseOptions: { modelAssetPath: MODEL, delegate: "GPU" },
-    runningMode: "VIDEO",
-    numHands: 1,
-  });
+  vision = await FilesetResolver.forVisionTasks(WASM);
+  // GPU 우선, 생성 실패 시 CPU로.
+  try {
+    handLandmarker = await makeLandmarker("GPU");
+    delegateInUse = "GPU";
+  } catch (e) {
+    console.warn("GPU 델리게이트 생성 실패 → CPU:", e);
+    handLandmarker = await makeLandmarker("CPU");
+    delegateInUse = "CPU";
+    cpuFallbackTried = true;
+  }
 
   statusEl.textContent = "카메라 여는 중…";
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -117,8 +160,14 @@ async function init() {
   video.srcObject = stream;
   await video.play();
 
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  // 일부 기기에서 play 직후 videoWidth가 0일 수 있어 메타데이터를 기다린다.
+  if (!video.videoWidth) {
+    await new Promise((res) => {
+      video.addEventListener("loadeddata", res, { once: true });
+    });
+  }
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
 
   audio.resume();
   startScreen.classList.add("hidden");
@@ -136,11 +185,14 @@ function loop(tMs) {
   ctx2d.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
   ctx2d.restore();
 
-  let chord = null, count = null, vY = 0;
+  let chord = null, count = null, vY = 0, handFound = false;
 
   if (handLandmarker) {
+    if (detectStart === null) detectStart = t;
     const res = handLandmarker.detectForVideo(video, tMs);
     if (res.landmarks && res.landmarks.length > 0) {
+      handFound = true;
+      everDetected = true;
       const lm = res.landmarks[0];
       count = stabilizer.update(countBent(lm));
       chord = CHORDS[count] ?? null;
@@ -151,12 +203,22 @@ function loop(tMs) {
     } else {
       stabilizer.reset(); wristV.reset(); strummer.reset();
     }
+
+    // GPU로 ~2.5초간 손을 한 번도 못 잡으면 CPU로 자동 전환.
+    if (!everDetected && !cpuFallbackTried && delegateInUse === "GPU" &&
+        detectStart !== null && t - detectStart > 2.5) {
+      swapToCpu();
+    }
   }
 
   elChord.textContent = chord ? chord.name : "-";
   elCount.textContent = `손가락: ${count ?? "-"}`;
   elVy.textContent = `v_y: ${vY.toFixed(2)}`;
   elStrum.textContent = `스트럼: ${lastStrum}`;
+  // 진단: 엔진(GPU/CPU)과 손 인식 여부. 손이 안 잡히면 안내 문구.
+  elEngine.textContent = handFound
+    ? `엔진: ${delegateInUse} ✓`
+    : `엔진: ${delegateInUse} · 손바닥을 화면 안에 펴서 보여주세요`;
 
   requestAnimationFrame(loop);
 }
