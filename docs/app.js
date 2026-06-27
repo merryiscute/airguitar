@@ -10,7 +10,7 @@ import {
   FingerStabilizer,
   WristVelocity,
   StrumDetector,
-} from "./logic.js";
+} from "./logic.js?v=13";
 
 // MediaPipe Tasks Vision은 init()에서 동적 import 한다.
 // 최상위 static import로 두면 CDN이 잠깐 안 될 때 모듈 전체가 죽어
