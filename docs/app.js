@@ -215,6 +215,13 @@ let handLandmarker = null;
 let lastTime = null;
 let lastStrum = "-";
 
+// 짧은 인식 공백(모션 블러 등)을 메우는 유예. 이 시간 안에 손이 다시
+// 잡히면 직전 코드/속도 상태를 이어가 깜빡임·끊김을 줄인다.
+const HOLD_S = 0.2;
+let lastHandT = null; // 마지막으로 손을 본 시각(초)
+let lastCount = null; // 직전 안정화된 손가락 수
+let lastChord = null; // 직전 코드
+
 // 손 추적 엔진 상태(진단/자동 폴백용).
 let HandLandmarkerClass = null; // 동적 import 한 클래스 보관
 let vision = null;             // FilesetResolver 결과 보관
@@ -270,8 +277,15 @@ async function init() {
   }
 
   statusEl.textContent = "카메라 여는 중…";
+  // 높은 프레임레이트 요청 → 노출이 짧아져 모션 블러가 줄고,
+  // 프레임 간 손 이동량이 작아져 추적 손실이 덜하다.
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "user", width: 640, height: 480 },
+    video: {
+      facingMode: "user",
+      width: { ideal: 640 },
+      height: { ideal: 480 },
+      frameRate: { ideal: 60 },
+    },
     audio: false,
   });
   video.srcObject = stream;
@@ -313,12 +327,25 @@ function loop(tMs) {
       const lm = res.landmarks[0];
       count = stabilizer.update(countBent(lm));
       chord = CHORDS[count] ?? null;
-      vY = wristV.update(lm, dt);
-      const dir = strummer.update(vY, dt);
+      // 공백을 건너뛴 경우, 마지막으로 본 시점부터의 실제 경과시간으로
+      // 속도를 계산(블러 중 일어난 스트럼도 재포착 때 살아난다). HOLD_S로 상한.
+      const vdt = lastHandT === null ? dt : Math.min(t - lastHandT, HOLD_S);
+      vY = wristV.update(lm, vdt);
+      const dir = strummer.update(vY, vdt);
       if (dir && chord) { audio.strum(chord, dir); lastStrum = dir; }
       drawHand(lm, chord);
+      lastHandT = t; lastCount = count; lastChord = chord;
     } else {
-      stabilizer.reset(); wristV.reset(); strummer.reset();
+      const sinceHand = lastHandT === null ? Infinity : t - lastHandT;
+      if (sinceHand < HOLD_S) {
+        // 유예 중: 직전 코드 유지(깜빡임 방지). 속도/스트럼 상태는 보존만 한다.
+        handFound = true;
+        count = lastCount;
+        chord = lastChord;
+      } else {
+        stabilizer.reset(); wristV.reset(); strummer.reset();
+        lastHandT = null; lastCount = null; lastChord = null;
+      }
     }
 
     // GPU로 ~2.5초간 손을 한 번도 못 잡으면 CPU로 자동 전환.

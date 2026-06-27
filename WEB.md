@@ -42,4 +42,6 @@ node tests/web_logic.test.mjs   # 순수 로직 검증, 8개 통과
 - 스트럼이 너무 민감/둔감 → 앱 안 **⚙ 코드 설정 → "스트럼 감도"** 슬라이더로 조절(저장됨).
   기본 임계값 0.7, 작을수록 민감. 코드 기본값은 `app.js`의 `DEFAULT_THRESHOLD`.
 - 코드가 자주 깜빡 → `new FingerStabilizer(window)` 의 `window`(기본 5) 늘리기
-- 코드 매핑 변경 → `logic.js` 의 `buildChords()`
+- 인식이 중간에 끊김(모션 블러) → `app.js`의 `HOLD_S`(기본 0.2초) 유예 시간 늘리기,
+  카메라 `frameRate: { ideal: 60 }` 요청으로 블러 완화
+- 코드 매핑 변경 → 앱 안 **⚙ 코드 설정**, 또는 `logic.js`의 `CHORD_LIBRARY` / `DEFAULT_MAPPING`
