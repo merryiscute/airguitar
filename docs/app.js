@@ -10,7 +10,7 @@ import {
   FingerStabilizer,
   WristVelocity,
   StrumDetector,
-} from "./logic.js?v=14";
+} from "./logic.js?v=15";
 
 // MediaPipe Tasks Vision은 init()에서 동적 import 한다.
 // 최상위 static import로 두면 CDN이 잠깐 안 될 때 모듈 전체가 죽어
@@ -359,15 +359,8 @@ async function init() {
   }
 
   statusEl.textContent = "카메라 여는 중…";
-  // 높은 프레임레이트 요청 → 노출이 짧아져 모션 블러가 줄고,
-  // 프레임 간 손 이동량이 작아져 추적 손실이 덜하다.
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: {
-      facingMode: "user",
-      width: { ideal: 640 },
-      height: { ideal: 480 },
-      frameRate: { ideal: 60 },
-    },
+    video: { facingMode: "user", width: 640, height: 480 },
     audio: false,
   });
   video.srcObject = stream;
@@ -379,34 +372,14 @@ async function init() {
       video.addEventListener("loadeddata", res, { once: true });
     });
   }
-  resizeCanvas();
-  window.addEventListener("resize", resizeCanvas);
-  window.addEventListener("orientationchange", resizeCanvas);
+  // 캔버스 비트맵을 비디오 크기로 맞추고, 표시는 CSS object-fit: cover에 맡긴다.
+  // (비디오와 오버레이를 같은 비트맵에 그리므로 항상 정렬이 맞는다.)
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
 
   audio.resume();
   startScreen.classList.add("hidden");
   requestAnimationFrame(loop);
-}
-
-// 캔버스 비트맵을 화면에 보이는 크기(× DPR)로 맞춘다.
-// 이렇게 하면 비디오/오버레이를 같은 좌표계에 직접 그릴 수 있어
-// object-fit 같은 표시 스케일에 의존하지 않아 항상 정렬이 맞는다.
-function resizeCanvas() {
-  const dpr = window.devicePixelRatio || 1;
-  const w = canvas.clientWidth || window.innerWidth;
-  const h = canvas.clientHeight || window.innerHeight;
-  canvas.width = Math.max(1, Math.round(w * dpr));
-  canvas.height = Math.max(1, Math.round(h * dpr));
-}
-
-// 비디오 프레임 → 캔버스 'cover' 변환(가운데 정렬, 넘치는 부분 잘림).
-let view = { ox: 0, oy: 0, dw: 1, dh: 1, cw: 1, ch: 1 };
-function updateView() {
-  const cw = canvas.width, ch = canvas.height;
-  const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
-  const scale = Math.max(cw / vw, ch / vh);
-  const dw = vw * scale, dh = vh * scale;
-  view = { ox: (cw - dw) / 2, oy: (ch - dh) / 2, dw, dh, cw, ch };
 }
 
 function loop(tMs) {
@@ -414,13 +387,10 @@ function loop(tMs) {
   const dt = lastTime === null ? 0 : t - lastTime;
   lastTime = t;
 
-  // 비디오/오버레이가 공유할 cover 변환 갱신 후, 거울 모드로 비디오 그리기.
-  updateView();
-  ctx2d.clearRect(0, 0, view.cw, view.ch);
+  // 거울 모드로 비디오 그리기(캔버스 비트맵 = 비디오 크기).
   ctx2d.save();
-  ctx2d.translate(view.cw, 0);
   ctx2d.scale(-1, 1);
-  ctx2d.drawImage(video, view.ox, view.oy, view.dw, view.dh);
+  ctx2d.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
   ctx2d.restore();
 
   let chord = null, count = null, vY = 0, handFound = false;
@@ -500,15 +470,9 @@ const HAND_CONNECTIONS = [
 ];
 
 // 인식한 손을 카메라 위에 띄운다: 박스(프레임) + 뼈대 선 + 관절 점 + 코드 라벨.
-// 비디오와 똑같은 cover 변환(view)을 써서 위치·크기가 항상 정확히 맞는다.
+// 캔버스 비트맵 = 비디오 크기라, 정규화 좌표에 W/H만 곱하면 비디오와 정렬이 맞는다.
 function drawHand(lm, chord) {
-  // 정규화 좌표 → 캔버스 픽셀(비디오와 동일 변환).
-  const X = (px) => view.ox + px * view.dw;
-  const Y = (py) => view.oy + py * view.dh;
-
-  // 화면 크기에 비례한 시각 두께.
-  const r = Math.max(3, view.ch * 0.006);
-  const lw = Math.max(2, view.ch * 0.004);
+  const W = canvas.width, H = canvas.height;
 
   // 손 전체를 감싸는 박스 좌표(정규화) 계산.
   let minX = 1, minY = 1, maxX = 0, maxY = 0;
@@ -520,51 +484,45 @@ function drawHand(lm, chord) {
   minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad);
   maxX = Math.min(1, maxX + pad); maxY = Math.min(1, maxY + pad);
 
-  // 비디오와 동일한 거울 변환으로 그린다.
+  // 거울 좌표계(화면에 보이는 위치)로 그린다.
   ctx2d.save();
-  ctx2d.translate(view.cw, 0);
   ctx2d.scale(-1, 1);
+  ctx2d.translate(-W, 0);
 
-  // 뼈대 선
   ctx2d.strokeStyle = "rgba(74, 222, 128, 0.9)";
-  ctx2d.lineWidth = lw;
+  ctx2d.lineWidth = 3;
   ctx2d.lineCap = "round";
   for (const [a, b] of HAND_CONNECTIONS) {
     ctx2d.beginPath();
-    ctx2d.moveTo(X(lm[a].x), Y(lm[a].y));
-    ctx2d.lineTo(X(lm[b].x), Y(lm[b].y));
+    ctx2d.moveTo(lm[a].x * W, lm[a].y * H);
+    ctx2d.lineTo(lm[b].x * W, lm[b].y * H);
     ctx2d.stroke();
   }
 
-  // 관절 점
   ctx2d.fillStyle = "#4ade80";
   for (const p of lm) {
     ctx2d.beginPath();
-    ctx2d.arc(X(p.x), Y(p.y), r, 0, Math.PI * 2);
+    ctx2d.arc(p.x * W, p.y * H, 5, 0, Math.PI * 2);
     ctx2d.fill();
   }
 
-  // 인식 박스(프레임)
   ctx2d.strokeStyle = "#22d3ee";
-  ctx2d.lineWidth = lw;
-  ctx2d.strokeRect(X(minX), Y(minY), (maxX - minX) * view.dw, (maxY - minY) * view.dh);
+  ctx2d.lineWidth = 3;
+  ctx2d.strokeRect(minX * W, minY * H, (maxX - minX) * W, (maxY - minY) * H);
   ctx2d.restore();
 
   // 코드 라벨은 거울 좌표라 글자가 뒤집히므로 정상 좌표계에서 다시 그린다.
-  // 거울 화면에서 X(maxX)는 화면 왼쪽(cw - X) 위치에 보인다.
-  const boxLeftOnScreen = view.cw - X(maxX);
-  const boxTopOnScreen = Y(minY);
-  const fs = Math.max(16, view.ch * 0.022);
+  const boxLeftOnScreen = (1 - maxX) * W;
+  const boxTopOnScreen = minY * H;
   const label = chord ? chord.name : "?";
   ctx2d.save();
-  ctx2d.font = `bold ${Math.round(fs)}px -apple-system, system-ui, sans-serif`;
+  ctx2d.font = "bold 28px -apple-system, system-ui, sans-serif";
   const tw = ctx2d.measureText(label).width;
-  const bh = fs * 1.25;
   ctx2d.fillStyle = "#22d3ee";
-  ctx2d.fillRect(boxLeftOnScreen, Math.max(0, boxTopOnScreen - bh), tw + 16, bh);
+  ctx2d.fillRect(boxLeftOnScreen, Math.max(0, boxTopOnScreen - 34), tw + 16, 34);
   ctx2d.fillStyle = "#06222b";
   ctx2d.textBaseline = "middle";
-  ctx2d.fillText(label, boxLeftOnScreen + 8, Math.max(bh / 2, boxTopOnScreen - bh / 2));
+  ctx2d.fillText(label, boxLeftOnScreen + 8, Math.max(17, boxTopOnScreen - 17));
   ctx2d.restore();
 }
 
