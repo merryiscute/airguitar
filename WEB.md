@@ -39,6 +39,7 @@ node tests/web_logic.test.mjs   # 순수 로직 검증, 8개 통과
 ```
 
 ## 튜닝 포인트 (`app.js` / `logic.js`)
-- 스트럼이 너무 민감/둔감 → `new StrumDetector(threshold, ...)` 의 `threshold`(기본 1.2)
+- 스트럼이 너무 민감/둔감 → 앱 안 **⚙ 코드 설정 → "스트럼 감도"** 슬라이더로 조절(저장됨).
+  기본 임계값 0.7, 작을수록 민감. 코드 기본값은 `app.js`의 `DEFAULT_THRESHOLD`.
 - 코드가 자주 깜빡 → `new FingerStabilizer(window)` 의 `window`(기본 5) 늘리기
 - 코드 매핑 변경 → `logic.js` 의 `buildChords()`

@@ -169,6 +169,27 @@ html, body {
   border: 1px solid #3a3a44;
   border-radius: 10px;
 }
+/* 스트럼 감도 슬라이더 */
+.sens {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sens input[type="range"] {
+  flex: 1;
+  max-width: 200px;
+  accent-color: #4ade80;
+}
+.sens-hint {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.sens-hint #sens-val { color: #4ade80; font-weight: 700; }
+
 .settings-actions {
   display: flex;
   gap: 12px;

@@ -27,6 +27,19 @@
       <h2>코드 설정</h2>
       <p>손가락 굽힌 개수마다 코드를 고르세요.</p>
       <div class="rows" id="settings-rows"></div>
+
+      <div class="sens">
+        <label class="settings-row">
+          <span>스트럼 감도</span>
+          <input type="range" id="sens-range" min="0.3" max="2.0" step="0.05" />
+        </label>
+        <div class="sens-hint">
+          <span>민감 (쉽게)</span>
+          <span id="sens-val">임계값 0.70</span>
+          <span>둔감</span>
+        </div>
+      </div>
+
       <div class="settings-actions">
         <button id="settings-reset" class="ghost">기본값</button>
         <button id="settings-save">저장</button>
