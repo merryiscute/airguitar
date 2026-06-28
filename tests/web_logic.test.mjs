@@ -17,7 +17,7 @@ import {
   WristVelocity,
   StrumDetector,
   WRIST,
-} from "../docs/logic.js";
+} from "../docs/airguitar/logic.js";
 
 let passed = 0;
 let failed = 0;

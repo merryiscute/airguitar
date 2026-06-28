@@ -1,8 +1,10 @@
 # 웹 버전 — 안드로이드 폰에서 테스트하기
 
-`docs/` 의 `index.html` / `app.js` / `logic.js` / `style.css` 는 설치 없이 폰
-브라우저에서 도는 에어 기타 웹 앱입니다. MediaPipe Tasks Vision(손 추적) +
-Web Audio(소리)를 쓰며, 카메라·스피커는 폰 것을 그대로 사용합니다.
+`docs/index.html` + `docs/home.css` 는 상단 GNB('(안)유용한 기능' 드롭다운)가 있는
+홈 페이지이고, 에어 기타 앱은 `docs/airguitar/`(`index.html`/`app.js`/`logic.js`/`style.css`)에
+있습니다. 설치 없이 폰 브라우저에서 돌며 MediaPipe Tasks Vision(손+팔 추적) +
+Web Audio(소리)를 쓰고, 카메라·스피커는 폰 것을 그대로 사용합니다.
+사이트: `merryguitar.com/`(홈) · `merryguitar.com/airguitar/`(에어 기타).
 
 ## 왜 GitHub Pages인가
 브라우저는 **HTTPS(또는 localhost)** 에서만 카메라(`getUserMedia`)를 허용합니다.
@@ -35,7 +37,7 @@ python3 -m http.server 8000 --directory docs
 
 ## 로직 검증 (브라우저/카메라 없이)
 ```bash
-node tests/web_logic.test.mjs   # 순수 로직 검증, 8개 통과
+node tests/web_logic.test.mjs   # 순수 로직 검증, 9개 통과
 ```
 
 ## 튜닝 포인트 (`app.js` / `logic.js`)

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- 폰 브라우저가 옛 빌드를 붙들지 않도록 HTML 캐시 방지 -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>에어 기타 (오른손)</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="stage">
+    <video id="video" playsinline muted></video>
+    <canvas id="canvas"></canvas>
+
+    <div id="hud">
+      <div class="chord" id="chord">-</div>
+      <div class="meta">
+        <span id="count">손가락: -</span>
+        <span id="vy">v_y: 0.00</span>
+        <span id="strum">스트럼: -</span>
+        <span id="engine">엔진: -</span>
+      </div>
+    </div>
+
+    <button id="settings-btn" title="코드 설정">⚙</button>
+
+    <div id="settings" class="hidden">
+      <h2>코드 설정</h2>
+      <p>손가락 굽힌 개수마다 코드를 고르세요.</p>
+      <div class="rows" id="settings-rows"></div>
+
+      <div class="sens">
+        <label class="settings-row">
+          <span>스트럼 감도</span>
+          <input type="range" id="sens-range" min="0.3" max="2.0" step="0.05" />
+        </label>
+        <div class="sens-hint">
+          <span>민감 (쉽게)</span>
+          <span id="sens-val">임계값 0.70</span>
+          <span>둔감</span>
+        </div>
+      </div>
+
+      <div class="settings-actions">
+        <button id="settings-reset" class="ghost">기본값</button>
+        <button id="settings-save">저장</button>
+      </div>
+    </div>
+
+    <div id="start-screen">
+      <h1>🎸 에어 기타</h1>
+      <p>오른손을 카메라에 비추세요.<br />
+         손가락 <b>굽힌 개수</b>로 코드를 고르고,<br />
+         손목을 <b>위·아래로 휘둘러</b> 스트럼하세요.</p>
+      <ul class="legend" id="legend">
+        <li><b>0개</b>(손 펴기) → C</li>
+        <li><b>1개</b> → G</li>
+        <li><b>2개</b> → Am</li>
+        <li><b>3개</b> → F</li>
+      </ul>
+      <button id="start-btn">시작 (카메라 허용)</button>
+      <button id="config-btn" class="ghost">코드 설정</button>
+      <p class="status" id="status"></p>
+    </div>
+  </div>
+
+  <!-- 매 접속마다 고유 토큰을 붙여 app.js(및 logic.js)를 항상 최신으로 받는다.
+       덕분에 주소에 ?v= 를 붙일 필요 없이 새로고침만 하면 된다. -->
+  <script type="module">
+    import(`./app.js?t=${Date.now()}`).catch((err) => {
+      const s = document.getElementById("status");
+      if (s) s.textContent = "로드 오류: " + (err.message || err);
+      console.error(err);
+    });
+  </script>
+</body>
+</html>
