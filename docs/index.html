@@ -67,6 +67,14 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=16"></script>
+  <!-- 매 접속마다 고유 토큰을 붙여 app.js(및 logic.js)를 항상 최신으로 받는다.
+       덕분에 주소에 ?v= 를 붙일 필요 없이 새로고침만 하면 된다. -->
+  <script type="module">
+    import(`./app.js?t=${Date.now()}`).catch((err) => {
+      const s = document.getElementById("status");
+      if (s) s.textContent = "로드 오류: " + (err.message || err);
+      console.error(err);
+    });
+  </script>
 </body>
 </html>

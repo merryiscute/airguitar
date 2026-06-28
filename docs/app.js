@@ -2,7 +2,9 @@
 // MediaPipe Tasks Vision(HandLandmarker) + Web Audio.
 // 순수 로직은 logic.js, 여기서는 카메라/추론/오디오/렌더만 담당한다.
 
-import {
+// logic.js도 app.js와 같은 캐시 토큰(import.meta.url의 ?t=…)으로 불러와
+// 항상 최신을 받게 한다. (버전 번호를 손댈 필요가 없다)
+const {
   buildChordsFromMapping,
   CHORD_LIBRARY,
   DEFAULT_MAPPING,
@@ -10,7 +12,7 @@ import {
   FingerStabilizer,
   WristVelocity,
   StrumDetector,
-} from "./logic.js?v=16";
+} = await import(`./logic.js${new URL(import.meta.url).search}`);
 
 // MediaPipe Tasks Vision은 init()에서 동적 import 한다.
 // 최상위 static import로 두면 CDN이 잠깐 안 될 때 모듈 전체가 죽어
